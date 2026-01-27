@@ -1,0 +1,67 @@
+{
+  "name": "silver_quality_checkpoint",
+  "config_version": 1.0,
+  "template_name": null,
+  "module_name": "great_expectations.checkpoint",
+  "class_name": "Checkpoint",
+  "run_name_template": "%Y%m%d-%H%M%S-silver-quality-check",
+  "expectation_suite_name": null,
+  "batch_request": {},
+  "action_list": [
+    {
+      "name": "store_validation_result",
+      "action": {
+        "class_name": "StoreValidationResultAction"
+      }
+    },
+    {
+      "name": "update_data_docs",
+      "action": {
+        "class_name": "UpdateDataDocsAction"
+      }
+    }
+  ],
+  "evaluation_parameters": {},
+  "runtime_configuration": {},
+  "validations": [
+    {
+      "batch_request": {
+        "datasource_name": "postgres_dwh",
+        "data_connector_name": "default_inferred_data_connector_name",
+        "data_asset_name": "silver.crm_cust_info",
+        "batch_spec_passthrough": {
+          "reader_method": "query",
+          "query": "SELECT * FROM silver.crm_cust_info"
+        }
+      },
+      "expectation_suite_name": "silver_crm_cust_info_suite"
+    },
+    {
+      "batch_request": {
+        "datasource_name": "postgres_dwh",
+        "data_connector_name": "default_inferred_data_connector_name",
+        "data_asset_name": "silver.crm_prd_info",
+        "batch_spec_passthrough": {
+          "reader_method": "query",
+          "query": "SELECT * FROM silver.crm_prd_info"
+        }
+      },
+      "expectation_suite_name": "silver_crm_prd_info_suite"
+    },
+    {
+      "batch_request": {
+        "datasource_name": "postgres_dwh",
+        "data_connector_name": "default_inferred_data_connector_name",
+        "data_asset_name": "silver.crm_sales_details",
+        "batch_spec_passthrough": {
+          "reader_method": "query",
+          "query": "SELECT * FROM silver.crm_sales_details"
+        }
+      },
+      "expectation_suite_name": "silver_crm_sales_details_suite"
+    }
+  ],
+  "profilers": [],
+  "ge_cloud_id": null,
+  "expectation_suite_ge_cloud_id": null
+}

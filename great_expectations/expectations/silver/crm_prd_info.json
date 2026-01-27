@@ -1,0 +1,70 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "silver_crm_prd_info_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 100,
+        "max_value": 10000
+      },
+      "meta": {
+        "notes": "Product table should have reasonable number of records"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "prd_id"
+      },
+      "meta": {
+        "notes": "Product ID should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "prd_id"
+      },
+      "meta": {
+        "notes": "Product IDs should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "prd_id",
+        "type_": "INTEGER"
+      },
+      "meta": {
+        "notes": "Product ID should be integer"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "prd_cost",
+        "type_": "FLOAT"
+      },
+      "meta": {
+        "notes": "Product cost should be numeric"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "prd_cost",
+        "min_value": 0,
+        "max_value": 10000
+      },
+      "meta": {
+        "notes": "Product cost should be reasonable"
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.12",
+    "notes": "Silver layer product data expectations"
+  }
+}

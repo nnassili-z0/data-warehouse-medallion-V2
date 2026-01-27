@@ -1,0 +1,87 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "gold_dim_customers_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 1000,
+        "max_value": 100000
+      },
+      "meta": {
+        "notes": "Customer dimension should have reasonable number of records"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_key"
+      },
+      "meta": {
+        "notes": "Surrogate key should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "customer_key"
+      },
+      "meta": {
+        "notes": "Surrogate keys should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_id"
+      },
+      "meta": {
+        "notes": "Customer ID should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "customer_id"
+      },
+      "meta": {
+        "notes": "Customer IDs should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "marital_status",
+        "value_set": ["Single", "Married", "n/a"]
+      },
+      "meta": {
+        "notes": "Marital status should be normalized"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "gender",
+        "value_set": ["Female", "Male", "n/a"]
+      },
+      "meta": {
+        "notes": "Gender should be normalized"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "customer_key",
+        "type_": "INTEGER"
+      },
+      "meta": {
+        "notes": "Surrogate key should be integer"
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.12",
+    "notes": "Gold layer customer dimension expectations"
+  }
+}

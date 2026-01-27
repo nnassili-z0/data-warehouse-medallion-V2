@@ -35,6 +35,7 @@ services:
       - ../migrations:/opt/project/migrations:ro
       - ../tests:/opt/project/tests:ro
       - ../config:/opt/project/config:ro
+      - ../great_expectations:/opt/project/great_expectations
       - ../requirements.txt:/opt/project/requirements.txt:ro
     ports:
       - "8080:8080"

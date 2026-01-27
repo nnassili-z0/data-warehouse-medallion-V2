@@ -42,21 +42,130 @@ class DataQualityChecker:
             logger.error(f"Failed to load config from {self.config_path}: {e}")
             raise QualityCheckError(f"Configuration loading failed: {e}")
 
-    def run_quality_checks(self, layer: str, postgres_conn_id: str = 'postgres_default') -> Dict[str, Any]:
+    def run_single_quality_check(self, layer: str, check_name: str, postgres_conn_id: str = 'postgres_default') -> Dict[str, Any]:
+        """
+        Run a single quality check for parallel execution
+
+        Args:
+            layer: 'silver' or 'gold'
+            check_name: Name of the specific check to run
+            postgres_conn_id: Airflow connection ID for PostgreSQL
+
+        Returns:
+            Dict containing the result of the single check
+        """
+        if layer not in ['silver', 'gold']:
+            raise ValueError(f"Invalid layer: {layer}. Must be 'silver' or 'gold'")
+
+        checks = self.config.get('quality_checks', {}).get(layer, [])
+        check = next((c for c in checks if c['name'] == check_name), None)
+
+        if not check:
+            raise ValueError(f"Quality check '{check_name}' not found for layer '{layer}'")
+
+        hook = PostgresHook(postgres_conn_id=postgres_conn_id)
+
+        try:
+            conn = hook.get_conn()
+            cursor = conn.cursor()
+
+            logger.info(f"Running quality check: {check_name}")
+            result = self._run_single_check(cursor, check, layer)
+
+            # Log results
+            status = result['status']
+            clean_pct = result['clean_percentage']
+            logger.info(f"Check {check_name}: {status} ({clean_pct:.2f}% clean)")
+
+            return {check_name: result}
+
+        except Exception as e:
+            logger.error(f"Quality check {check_name} failed: {e}")
+            return {
+                check_name: {
+                    'total_records': 0,
+                    'issues_found': 0,
+                    'clean_records': 0,
+                    'clean_percentage': 0.0,
+                    'issue_percentage': 0.0,
+                    'status': 'ERROR',
+                    'error': str(e)
+                }
+            }
+        finally:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+
+    def aggregate_quality_results(self, layer: str, check_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Aggregate results from parallel quality checks
+
+        Args:
+            layer: 'silver' or 'gold'
+            check_results: List of individual check results
+
+        Returns:
+            Aggregated summary dictionary
+        """
+        logger.info(f"Aggregating quality check results for {layer} layer")
+
+        # Combine all individual check results
+        summary = {}
+        for result_dict in check_results:
+            summary.update(result_dict)
+
+        # Overall assessment
+        overall_status = self._calculate_overall_status(summary)
+        summary['_overall'] = {
+            'total_checks': len([k for k in summary.keys() if not k.startswith('_')]),
+            'passed_checks': sum(1 for r in summary.values() if isinstance(r, dict) and r.get('status') == 'PASS'),
+            'failed_checks': sum(1 for r in summary.values() if isinstance(r, dict) and r.get('status') == 'FAIL'),
+            'error_checks': sum(1 for r in summary.values() if isinstance(r, dict) and r.get('status') == 'ERROR'),
+            'overall_status': overall_status
+        }
+
+        # Generate reports after overall assessment
+        self._generate_reports(layer, summary)
+
+        logger.info(f"Completed aggregation for {layer} layer. Overall status: {overall_status}")
+        return summary
+
+    def get_check_names(self, layer: str) -> List[str]:
+        """
+        Get list of quality check names for a layer
+
+        Args:
+            layer: 'silver' or 'gold'
+
+        Returns:
+            List of check names
+        """
+        checks = self.config.get('quality_checks', {}).get(layer, [])
+        return [check['name'] for check in checks]
+
+    def run_quality_checks(self, layer: str, postgres_conn_id: str = 'postgres_default', parallel: bool = False) -> Dict[str, Any]:
         """
         Run all quality checks for a given layer
 
         Args:
             layer: 'silver' or 'gold'
             postgres_conn_id: Airflow connection ID for PostgreSQL
+            parallel: Whether to run checks in parallel (for Airflow task generation)
 
         Returns:
             Dict containing summary of all quality check results
         """
+        if parallel:
+            # For parallel execution, just return check names - actual execution happens in individual tasks
+            return {'check_names': self.get_check_names(layer)}
+
+        # Sequential execution (backward compatibility)
         if layer not in ['silver', 'gold']:
             raise ValueError(f"Invalid layer: {layer}. Must be 'silver' or 'gold'")
 
-        logger.info(f"Starting quality checks for {layer} layer")
+        logger.info(f"Starting sequential quality checks for {layer} layer")
         checks = self.config.get('quality_checks', {}).get(layer, [])
 
         if not checks:
@@ -267,17 +376,51 @@ def get_quality_checker(config_path='/opt/project/config/quality_checks.yaml'):
     return quality_checker
 
 
-def run_quality_checks(layer: str, config_path: str = '/opt/project/config/quality_checks.yaml', **kwargs) -> Dict[str, Any]:
+def run_single_quality_check(layer: str, check_name: str, postgres_conn_id: str = 'postgres_default', **kwargs) -> Dict[str, Any]:
+    """
+    Airflow-compatible function to run a single quality check
+
+    Args:
+        layer: 'silver' or 'gold'
+        check_name: Name of the specific check to run
+        postgres_conn_id: Airflow connection ID for PostgreSQL
+        **kwargs: Additional arguments (passed by Airflow)
+
+    Returns:
+        Dict containing the result of the single check
+    """
+    checker = get_quality_checker()
+    return checker.run_single_quality_check(layer, check_name, postgres_conn_id)
+
+
+def aggregate_quality_results(layer: str, check_results: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
+    """
+    Airflow-compatible function to aggregate quality check results
+
+    Args:
+        layer: 'silver' or 'gold'
+        check_results: List of individual check results from XCom
+        **kwargs: Additional arguments (passed by Airflow)
+
+    Returns:
+        Aggregated summary dictionary
+    """
+    checker = get_quality_checker()
+    return checker.aggregate_quality_results(layer, check_results)
+
+
+def run_quality_checks(layer: str, config_path: str = '/opt/project/config/quality_checks.yaml', parallel: bool = False, **kwargs) -> Dict[str, Any]:
     """
     Airflow-compatible function to run quality checks
 
     Args:
         layer: 'silver' or 'gold'
         config_path: Path to quality check configuration file
+        parallel: Whether to prepare for parallel execution
         **kwargs: Additional arguments (passed by Airflow)
 
     Returns:
         Dict containing quality check results
     """
     checker = get_quality_checker(config_path)
-    return checker.run_quality_checks(layer)
+    return checker.run_quality_checks(layer, parallel=parallel)

@@ -1,0 +1,88 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "silver_crm_sales_details_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 10000,
+        "max_value": 1000000
+      },
+      "meta": {
+        "notes": "Sales details should have substantial number of records"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "sls_id"
+      },
+      "meta": {
+        "notes": "Sales ID should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "sls_id"
+      },
+      "meta": {
+        "notes": "Sales IDs should be unique"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "sls_cst_id"
+      },
+      "meta": {
+        "notes": "Customer ID in sales should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "sls_prd_id"
+      },
+      "meta": {
+        "notes": "Product ID in sales should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "sls_quantity",
+        "type_": "INTEGER"
+      },
+      "meta": {
+        "notes": "Sales quantity should be integer"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "sls_quantity",
+        "min_value": 1,
+        "max_value": 1000
+      },
+      "meta": {
+        "notes": "Sales quantity should be reasonable"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "sls_sales_date",
+        "type_": "DATE"
+      },
+      "meta": {
+        "notes": "Sales date should be valid date"
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.12",
+    "notes": "Silver layer sales details expectations"
+  }
+}

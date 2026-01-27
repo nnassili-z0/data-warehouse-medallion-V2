@@ -1,0 +1,100 @@
+{
+  "data_asset_type": "Dataset",
+  "expectation_suite_name": "gold_fact_sales_suite",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 10000,
+        "max_value": 1000000
+      },
+      "meta": {
+        "notes": "Sales fact table should have substantial number of records"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "order_number"
+      },
+      "meta": {
+        "notes": "Order number should never be null"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "product_key"
+      },
+      "meta": {
+        "notes": "Product key should never be null (foreign key)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_key"
+      },
+      "meta": {
+        "notes": "Customer key should never be null (foreign key)"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "quantity",
+        "type_": "INTEGER"
+      },
+      "meta": {
+        "notes": "Sales quantity should be integer"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "quantity",
+        "min_value": 1,
+        "max_value": 1000
+      },
+      "meta": {
+        "notes": "Sales quantity should be reasonable"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "sales_amount",
+        "type_": "FLOAT"
+      },
+      "meta": {
+        "notes": "Sales amount should be numeric"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "sales_amount",
+        "min_value": 0,
+        "max_value": 100000
+      },
+      "meta": {
+        "notes": "Sales amount should be reasonable"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_of_type",
+      "kwargs": {
+        "column": "order_date",
+        "type_": "DATE"
+      },
+      "meta": {
+        "notes": "Order date should be valid date"
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.12",
+    "notes": "Gold layer sales fact table expectations"
+  }
+}

@@ -4,9 +4,11 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.models import Variable
 import logging
+import subprocess
+import os
 
 # Import our custom quality checker
-from quality_checks import run_quality_checks
+from quality_checks import run_single_quality_check, aggregate_quality_results, get_quality_checker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +18,9 @@ logger = logging.getLogger(__name__)
 DB_CONN_ID = Variable.get('db_connection_id', default_var='postgres_default')
 ARTIFACTS_PATH = Variable.get('artifacts_path', default_var='/opt/project/artifacts')
 CONFIG_PATH = Variable.get('config_path', default_var='/opt/project/config/quality_checks.yaml')
+
+# Initialize quality checker
+quality_checker = get_quality_checker(CONFIG_PATH)
 
 default_args = {
     'owner': Variable.get('pipeline_owner', default_var='data-eng'),
@@ -83,14 +88,6 @@ ddl_gold = PostgresOperator(
     dag=dag,
 )
 
-# Load Tasks
-load_bronze = PostgresOperator(
-    task_id='load_bronze',
-    sql=load_bronze_sql,
-    postgres_conn_id=DB_CONN_ID,
-    dag=dag,
-)
-
 load_silver = PostgresOperator(
     task_id='load_silver',
     sql=load_silver_sql,
@@ -98,20 +95,127 @@ load_silver = PostgresOperator(
     dag=dag,
 )
 
-# Quality Checks
-quality_silver = PythonOperator(
-    task_id='quality_silver',
-    python_callable=run_quality_checks,
-    op_kwargs={'layer': 'silver', 'config_path': CONFIG_PATH},
+# Great Expectations Validation Tasks
+ge_silver_validation = PythonOperator(
+    task_id='ge_silver_validation',
+    python_callable=run_ge_validation,
+    op_kwargs={
+        'checkpoint_name': 'silver_quality_checkpoint',
+        'ge_project_path': '/opt/project/great_expectations'
+    },
     dag=dag,
 )
 
-quality_gold = PythonOperator(
-    task_id='quality_gold',
-    python_callable=run_quality_checks,
-    op_kwargs={'layer': 'gold', 'config_path': CONFIG_PATH},
+ge_gold_validation = PythonOperator(
+    task_id='ge_gold_validation',
+    python_callable=run_ge_validation,
+    op_kwargs={
+        'checkpoint_name': 'gold_quality_checkpoint',
+        'ge_project_path': '/opt/project/great_expectations'
+    },
     dag=dag,
 )
+
+# Dynamic Quality Check Tasks Generation
+def create_quality_check_tasks(layer: str, dag):
+    """Create dynamic quality check tasks for parallel execution"""
+
+    # Get check names
+    check_names = quality_checker.get_check_names(layer)
+
+    if not check_names:
+        logger.warning(f"No quality checks defined for {layer} layer")
+        return None, None
+
+    # Create individual check tasks
+    check_tasks = []
+    for check_name in check_names:
+        task = PythonOperator(
+            task_id=f'quality_{layer}_{check_name}',
+            python_callable=run_single_quality_check,
+            op_kwargs={
+                'layer': layer,
+                'check_name': check_name,
+                'postgres_conn_id': DB_CONN_ID
+            },
+            dag=dag,
+        )
+        check_tasks.append(task)
+
+    # Create aggregation task
+    aggregate_task = PythonOperator(
+        task_id=f'quality_{layer}_aggregate',
+        python_callable=aggregate_quality_results,
+        op_kwargs={
+            'layer': layer,
+            'check_results': [f"{{{{ ti.xcom_pull(task_ids='quality_{layer}_{{check_name}}') }}}}" for check_name in check_names]
+        },
+        dag=dag,
+    )
+
+    # Set dependencies: all checks run in parallel, then aggregate
+    for check_task in check_tasks:
+        check_task >> aggregate_task
+
+    return check_tasks, aggregate_task
+
+# Great Expectations Validation Functions
+def run_ge_validation(checkpoint_name: str, ge_project_path: str = '/opt/project/great_expectations'):
+    """Run Great Expectations validation using checkpoint"""
+    try:
+        logger.info(f"Running Great Expectations checkpoint: {checkpoint_name}")
+
+        # Change to GE project directory
+        os.chdir(ge_project_path)
+
+        # Run GE checkpoint
+        cmd = ['great_expectations', 'checkpoint', 'run', checkpoint_name]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        logger.info(f"Great Expectations validation completed for {checkpoint_name}")
+        logger.info(f"STDOUT: {result.stdout}")
+        if result.stderr:
+            logger.warning(f"STDERR: {result.stderr}")
+
+        return {
+            'status': 'success',
+            'checkpoint': checkpoint_name,
+            'output': result.stdout,
+            'errors': result.stderr
+        }
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Great Expectations validation failed for {checkpoint_name}: {e}")
+        logger.error(f"STDOUT: {e.stdout}")
+        logger.error(f"STDERR: {e.stderr}")
+        return {
+            'status': 'failed',
+            'checkpoint': checkpoint_name,
+            'error': str(e),
+            'stdout': e.stdout,
+            'stderr': e.stderr
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error running GE validation for {checkpoint_name}: {e}")
+        return {
+            'status': 'failed',
+            'checkpoint': checkpoint_name,
+            'error': str(e)
+        }
+
+# Create quality check task groups
+silver_check_tasks, silver_aggregate = create_quality_check_tasks('silver', dag)
+gold_check_tasks, gold_aggregate = create_quality_check_tasks('gold', dag)
 
 # Dependencies
-init_db >> ddl_bronze >> ddl_silver >> ddl_gold >> load_bronze >> load_silver >> quality_silver >> quality_gold
+init_db >> ddl_bronze >> ddl_silver >> ddl_gold >> load_bronze >> load_silver >> ge_silver_validation
+
+# GE Silver validation must complete before Gold validation
+ge_silver_validation >> ge_gold_validation
+
+# Custom quality checks run after GE validation
+if silver_check_tasks:
+    ge_silver_validation >> silver_check_tasks
+
+if gold_check_tasks and silver_aggregate:
+    silver_aggregate >> gold_check_tasks
