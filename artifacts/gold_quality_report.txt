@@ -1,0 +1,27 @@
+Quality Report for GOLD Layer
+========================================
+
+Check: customer_key_duplicates
+  Total Records: 18484
+  Issues Found: 0
+  Clean Records: 18484
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: product_key_duplicates
+  Total Records: 197
+  Issues Found: 0
+  Clean Records: 197
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: orphaned_sales
+  Total Records: 60398
+  Issues Found: 3238
+  Clean Records: 57160
+  Clean Percentage: 94.64%
+  Issue Percentage: 5.36%
+  Status: FAIL
+

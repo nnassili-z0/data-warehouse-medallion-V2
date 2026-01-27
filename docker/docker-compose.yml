@@ -1,17 +1,17 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
+    user: root
     environment:
       POSTGRES_DB: datawarehouse
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
-      - ./migrations/postgres:/docker-entrypoint-initdb.d
       - ../datasets:/opt/project/datasets:ro
       - ../artifacts:/opt/project/artifacts
+      - ../migrations:/opt/project/migrations:ro
+      - ../tests:/opt/project/tests:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -26,28 +26,20 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/datawarehouse
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/project/dags
-      AIRFLOW__CORE__PLUGINS_FOLDER: /opt/project/plugins
-      AIRFLOW__CORE__BASE_LOG_FOLDER: /opt/project/logs
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__PLUGINS_FOLDER: /opt/airflow/plugins
     volumes:
-      - ./dags:/opt/project/dags
-      - ./migrations:/opt/project/migrations:ro
-      - ./tests:/opt/project/tests:ro
+      - ./dags:/opt/airflow/dags
       - ../datasets:/opt/project/datasets:ro
       - ../artifacts:/opt/project/artifacts
-      - airflow-logs:/opt/airflow/logs
+      - ../migrations:/opt/project/migrations:ro
+      - ../tests:/opt/project/tests:ro
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-    command: >
-      bash -c "
-      airflow db migrate &&
-      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
-      airflow webserver --port 8080 &
-      airflow scheduler
-      "
+    command: bash -c 'chown -R airflow:airflow /opt/project/artifacts && airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com 2>/dev/null; airflow connections add postgres_default --conn-type postgres --conn-host postgres --conn-login airflow --conn-password airflow --conn-port 5432 --conn-schema datawarehouse 2>/dev/null; airflow webserver --port 8080 & airflow scheduler'
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
@@ -56,4 +48,3 @@ services:
 
 volumes:
   postgres-db-volume:
-  airflow-logs:

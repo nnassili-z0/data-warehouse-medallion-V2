@@ -208,6 +208,55 @@ def run_quality_checks(layer, sql_file, output_prefix):
             f.write(f"  Clean Percentage: {metrics['clean_percentage']}%\n")
             f.write(f"  Issue Percentage: {metrics['issue_percentage']}%\n")
             f.write(f"  Status: {metrics['status']}\n\n")
+    
+    summary = {}
+    for check in checks:
+        # Get total records
+        cursor.execute(f"SELECT COUNT(*) FROM {check['table']}")
+        total = cursor.fetchone()[0]
+        
+        # Get issue records
+        cursor.execute(check['issue_query'])
+        issues = cursor.fetchall()
+        issue_count = len(issues)
+        
+        # Calculate metrics
+        clean_count = total - issue_count
+        clean_percentage = (clean_count / total * 100) if total > 0 else 0
+        issue_percentage = (issue_count / total * 100) if total > 0 else 0
+        
+        # Save CSV
+        with open(check['csv_file'], 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow([desc[0] for desc in cursor.description])
+            writer.writerows(issues)
+        
+        # Add to summary
+        summary[check['name']] = {
+            'total_records': total,
+            'issues_found': issue_count,
+            'clean_records': clean_count,
+            'clean_percentage': round(clean_percentage, 2),
+            'issue_percentage': round(issue_percentage, 2),
+            'status': 'PASS' if issue_count == 0 else 'FAIL'
+        }
+    
+    # Save summary JSON
+    with open(f'/opt/project/artifacts/{layer}_quality_summary.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    # Also save a text summary
+    with open(f'/opt/project/artifacts/{layer}_quality_report.txt', 'w') as f:
+        f.write(f"Quality Report for {layer.upper()} Layer\n")
+        f.write("=" * 40 + "\n\n")
+        for check_name, metrics in summary.items():
+            f.write(f"Check: {check_name}\n")
+            f.write(f"  Total Records: {metrics['total_records']}\n")
+            f.write(f"  Issues Found: {metrics['issues_found']}\n")
+            f.write(f"  Clean Records: {metrics['clean_records']}\n")
+            f.write(f"  Clean Percentage: {metrics['clean_percentage']}%\n")
+            f.write(f"  Issue Percentage: {metrics['issue_percentage']}%\n")
+            f.write(f"  Status: {metrics['status']}\n\n")
 
 # Quality Checks
 quality_silver = PythonOperator(

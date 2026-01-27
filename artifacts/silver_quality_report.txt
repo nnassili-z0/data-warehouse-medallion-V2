@@ -1,0 +1,59 @@
+Quality Report for SILVER Layer
+========================================
+
+Check: customer_duplicates
+  Total Records: 18484
+  Issues Found: 0
+  Clean Records: 18484
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: invalid_marital
+  Total Records: 18484
+  Issues Found: 0
+  Clean Records: 18484
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: invalid_gender
+  Total Records: 18484
+  Issues Found: 0
+  Clean Records: 18484
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: null_cst_id
+  Total Records: 18484
+  Issues Found: 0
+  Clean Records: 18484
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: product_duplicates
+  Total Records: 397
+  Issues Found: 77
+  Clean Records: 320
+  Clean Percentage: 80.6%
+  Issue Percentage: 19.4%
+  Status: FAIL
+
+Check: invalid_prd_line
+  Total Records: 397
+  Issues Found: 0
+  Clean Records: 397
+  Clean Percentage: 100.0%
+  Issue Percentage: 0.0%
+  Status: PASS
+
+Check: invalid_order_dates
+  Total Records: 60398
+  Issues Found: 19
+  Clean Records: 60379
+  Clean Percentage: 99.97%
+  Issue Percentage: 0.03%
+  Status: FAIL
+

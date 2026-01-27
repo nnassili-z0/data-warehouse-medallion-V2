@@ -1,0 +1,26 @@
+{
+  "customer_key_duplicates": {
+    "total_records": 18484,
+    "issues_found": 0,
+    "clean_records": 18484,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "product_key_duplicates": {
+    "total_records": 197,
+    "issues_found": 0,
+    "clean_records": 197,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "orphaned_sales": {
+    "total_records": 60398,
+    "issues_found": 3238,
+    "clean_records": 57160,
+    "clean_percentage": 94.64,
+    "issue_percentage": 5.36,
+    "status": "FAIL"
+  }
+}

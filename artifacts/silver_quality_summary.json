@@ -1,0 +1,58 @@
+{
+  "customer_duplicates": {
+    "total_records": 18484,
+    "issues_found": 0,
+    "clean_records": 18484,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "invalid_marital": {
+    "total_records": 18484,
+    "issues_found": 0,
+    "clean_records": 18484,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "invalid_gender": {
+    "total_records": 18484,
+    "issues_found": 0,
+    "clean_records": 18484,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "null_cst_id": {
+    "total_records": 18484,
+    "issues_found": 0,
+    "clean_records": 18484,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "product_duplicates": {
+    "total_records": 397,
+    "issues_found": 77,
+    "clean_records": 320,
+    "clean_percentage": 80.6,
+    "issue_percentage": 19.4,
+    "status": "FAIL"
+  },
+  "invalid_prd_line": {
+    "total_records": 397,
+    "issues_found": 0,
+    "clean_records": 397,
+    "clean_percentage": 100.0,
+    "issue_percentage": 0.0,
+    "status": "PASS"
+  },
+  "invalid_order_dates": {
+    "total_records": 60398,
+    "issues_found": 19,
+    "clean_records": 60379,
+    "clean_percentage": 99.97,
+    "issue_percentage": 0.03,
+    "status": "FAIL"
+  }
+}
