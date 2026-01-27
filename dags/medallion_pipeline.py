@@ -2,24 +2,36 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
-from airflow.providers.postgres.hooks.postgres import PostgresHook
-import csv
+from airflow.models import Variable
+import logging
+
+# Import our custom quality checker
+from quality_checks import run_quality_checks
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Get configuration from Airflow variables (with defaults)
+DB_CONN_ID = Variable.get('db_connection_id', default_var='postgres_default')
+ARTIFACTS_PATH = Variable.get('artifacts_path', default_var='/opt/project/artifacts')
+CONFIG_PATH = Variable.get('config_path', default_var='/opt/project/config/quality_checks.yaml')
 
 default_args = {
-    'owner': 'data-eng',
+    'owner': Variable.get('pipeline_owner', default_var='data-eng'),
     'depends_on_past': False,
     'start_date': datetime(2026, 1, 15),
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
+    'email_on_failure': Variable.get('email_on_failure', default_var=False),
+    'email_on_retry': Variable.get('email_on_retry', default_var=False),
+    'retries': int(Variable.get('max_retries', default_var=1)),
+    'retry_delay': timedelta(minutes=int(Variable.get('retry_delay_minutes', default_var=5))),
 }
 
 dag = DAG(
     'medallion_pipeline',
     default_args=default_args,
     description='Medallion Architecture Data Pipeline: Bronze -> Silver -> Gold',
-    schedule_interval=None,  # Manual trigger
+    schedule_interval=Variable.get('schedule_interval', default_var=None),  # Manual trigger
     catchup=False,
 )
 
@@ -45,7 +57,7 @@ quality_gold_sql = read_sql('/opt/project/tests/gold_quality_checks.sql')
 init_db = PostgresOperator(
     task_id='init_db',
     sql=init_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
 
@@ -53,21 +65,21 @@ init_db = PostgresOperator(
 ddl_bronze = PostgresOperator(
     task_id='ddl_bronze',
     sql=ddl_bronze_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
 
 ddl_silver = PostgresOperator(
     task_id='ddl_silver',
     sql=ddl_silver_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
 
 ddl_gold = PostgresOperator(
     task_id='ddl_gold',
     sql=ddl_gold_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
 
@@ -75,152 +87,29 @@ ddl_gold = PostgresOperator(
 load_bronze = PostgresOperator(
     task_id='load_bronze',
     sql=load_bronze_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
 
 load_silver = PostgresOperator(
     task_id='load_silver',
     sql=load_silver_sql,
-    postgres_conn_id='postgres_default',
+    postgres_conn_id=DB_CONN_ID,
     dag=dag,
 )
-
-def run_quality_checks(layer, sql_file, output_prefix):
-    import json
-    hook = PostgresHook(postgres_conn_id='postgres_default')
-    conn = hook.get_conn()
-    cursor = conn.cursor()
-    
-    # Define checks based on layer
-    if layer == 'silver':
-        checks = [
-            {
-                'name': 'customer_duplicates',
-                'table': 'silver.crm_cust_info',
-                'issue_query': "SELECT cst_id, COUNT(*) AS count FROM silver.crm_cust_info GROUP BY cst_id HAVING COUNT(*) > 1",
-                'csv_file': '/opt/project/artifacts/silver_cust_duplicates.csv'
-            },
-            {
-                'name': 'invalid_marital',
-                'table': 'silver.crm_cust_info',
-                'issue_query': "SELECT cst_id, cst_marital_status FROM silver.crm_cust_info WHERE cst_marital_status NOT IN ('Single', 'Married', 'n/a')",
-                'csv_file': '/opt/project/artifacts/silver_invalid_marital.csv'
-            },
-            {
-                'name': 'invalid_gender',
-                'table': 'silver.crm_cust_info',
-                'issue_query': "SELECT cst_id, cst_gndr FROM silver.crm_cust_info WHERE cst_gndr NOT IN ('Female', 'Male', 'n/a')",
-                'csv_file': '/opt/project/artifacts/silver_invalid_gender.csv'
-            },
-            {
-                'name': 'null_cst_id',
-                'table': 'silver.crm_cust_info',
-                'issue_query': "SELECT * FROM silver.crm_cust_info WHERE cst_id IS NULL",
-                'csv_file': '/opt/project/artifacts/silver_null_cst_id.csv'
-            },
-            {
-                'name': 'product_duplicates',
-                'table': 'silver.crm_prd_info',
-                'issue_query': "SELECT prd_key, COUNT(*) AS count FROM silver.crm_prd_info GROUP BY prd_key HAVING COUNT(*) > 1",
-                'csv_file': '/opt/project/artifacts/silver_prd_duplicates.csv'
-            },
-            {
-                'name': 'invalid_prd_line',
-                'table': 'silver.crm_prd_info',
-                'issue_query': "SELECT prd_id, prd_line FROM silver.crm_prd_info WHERE prd_line NOT IN ('Mountain', 'Road', 'Other Sales', 'Touring', 'n/a')",
-                'csv_file': '/opt/project/artifacts/silver_invalid_prd_line.csv'
-            },
-            {
-                'name': 'invalid_order_dates',
-                'table': 'silver.crm_sales_details',
-                'issue_query': "SELECT sls_ord_num, sls_order_dt FROM silver.crm_sales_details WHERE sls_order_dt IS NULL AND sls_ord_num IS NOT NULL",
-                'csv_file': '/opt/project/artifacts/silver_invalid_order_dates.csv'
-            }
-        ]
-    elif layer == 'gold':
-        checks = [
-            {
-                'name': 'customer_key_duplicates',
-                'table': 'gold.dim_customers',
-                'issue_query': "SELECT customer_key, COUNT(*) AS duplicate_count FROM gold.dim_customers GROUP BY customer_key HAVING COUNT(*) > 1",
-                'csv_file': '/opt/project/artifacts/gold_cust_key_duplicates.csv'
-            },
-            {
-                'name': 'product_key_duplicates',
-                'table': 'gold.dim_products',
-                'issue_query': "SELECT product_key, COUNT(*) AS duplicate_count FROM gold.dim_products GROUP BY product_key HAVING COUNT(*) > 1",
-                'csv_file': '/opt/project/artifacts/gold_prod_key_duplicates.csv'
-            },
-            {
-                'name': 'orphaned_sales',
-                'table': 'gold.fact_sales',
-                'issue_query': "SELECT f.order_number, f.customer_key, f.product_key, c.customer_id, p.product_id FROM gold.fact_sales f LEFT JOIN gold.dim_customers c ON c.customer_key = f.customer_key LEFT JOIN gold.dim_products p ON p.product_key = f.product_key WHERE c.customer_id IS NULL OR p.product_id IS NULL",
-                'csv_file': '/opt/project/artifacts/gold_orphaned_sales.csv'
-            }
-        ]
-    
-    summary = {}
-    for check in checks:
-        # Get total records
-        cursor.execute(f"SELECT COUNT(*) FROM {check['table']}")
-        total = cursor.fetchone()[0]
-        
-        # Get issue records
-        cursor.execute(check['issue_query'])
-        issues = cursor.fetchall()
-        issue_count = len(issues)
-        
-        # Calculate metrics
-        clean_count = total - issue_count
-        clean_percentage = (clean_count / total * 100) if total > 0 else 0
-        issue_percentage = (issue_count / total * 100) if total > 0 else 0
-        
-        # Save CSV
-        with open(check['csv_file'], 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow([desc[0] for desc in cursor.description])
-            writer.writerows(issues)
-        
-        # Add to summary
-        summary[check['name']] = {
-            'total_records': total,
-            'issues_found': issue_count,
-            'clean_records': clean_count,
-            'clean_percentage': round(clean_percentage, 2),
-            'issue_percentage': round(issue_percentage, 2),
-            'status': 'PASS' if issue_count == 0 else 'FAIL'
-        }
-    
-    # Save summary JSON
-    with open(f'/opt/project/artifacts/{layer}_quality_summary.json', 'w') as f:
-        json.dump(summary, f, indent=2)
-    
-    # Also save a text summary
-    with open(f'/opt/project/artifacts/{layer}_quality_report.txt', 'w') as f:
-        f.write(f"Quality Report for {layer.upper()} Layer\n")
-        f.write("=" * 40 + "\n\n")
-        for check_name, metrics in summary.items():
-            f.write(f"Check: {check_name}\n")
-            f.write(f"  Total Records: {metrics['total_records']}\n")
-            f.write(f"  Issues Found: {metrics['issues_found']}\n")
-            f.write(f"  Clean Records: {metrics['clean_records']}\n")
-            f.write(f"  Clean Percentage: {metrics['clean_percentage']}%\n")
-            f.write(f"  Issue Percentage: {metrics['issue_percentage']}%\n")
-            f.write(f"  Status: {metrics['status']}\n\n")
 
 # Quality Checks
 quality_silver = PythonOperator(
     task_id='quality_silver',
     python_callable=run_quality_checks,
-    op_kwargs={'layer': 'silver', 'sql_file': '/opt/project/tests/silver_quality_checks.sql', 'output_prefix': 'silver'},
+    op_kwargs={'layer': 'silver', 'config_path': CONFIG_PATH},
     dag=dag,
 )
 
 quality_gold = PythonOperator(
     task_id='quality_gold',
     python_callable=run_quality_checks,
-    op_kwargs={'layer': 'gold', 'sql_file': '/opt/project/tests/gold_quality_checks.sql', 'output_prefix': 'gold'},
+    op_kwargs={'layer': 'gold', 'config_path': CONFIG_PATH},
     dag=dag,
 )
 

@@ -1,0 +1,80 @@
+quality_checks:
+  silver:
+    - name: customer_duplicates
+      table: silver.crm_cust_info
+      description: Check for duplicate customer IDs
+      issue_query: "SELECT cst_id, COUNT(*) AS count FROM silver.crm_cust_info GROUP BY cst_id HAVING COUNT(*) > 1"
+      csv_file: /opt/project/artifacts/silver_cust_duplicates.csv
+      severity: high
+
+    - name: invalid_marital
+      table: silver.crm_cust_info
+      description: Check for invalid marital status values
+      issue_query: "SELECT cst_id, cst_marital_status FROM silver.crm_cust_info WHERE cst_marital_status NOT IN ('Single', 'Married', 'n/a')"
+      csv_file: /opt/project/artifacts/silver_invalid_marital.csv
+      severity: medium
+
+    - name: invalid_gender
+      table: silver.crm_cust_info
+      description: Check for invalid gender values
+      issue_query: "SELECT cst_id, cst_gndr FROM silver.crm_cust_info WHERE cst_gndr NOT IN ('Female', 'Male', 'n/a')"
+      csv_file: /opt/project/artifacts/silver_invalid_gender.csv
+      severity: medium
+
+    - name: null_cst_id
+      table: silver.crm_cust_info
+      description: Check for null customer IDs
+      issue_query: "SELECT * FROM silver.crm_cust_info WHERE cst_id IS NULL"
+      csv_file: /opt/project/artifacts/silver_null_cst_id.csv
+      severity: critical
+
+    - name: product_duplicates
+      table: silver.crm_prd_info
+      description: Check for duplicate product keys
+      issue_query: "SELECT prd_key, COUNT(*) AS count FROM silver.crm_prd_info GROUP BY prd_key HAVING COUNT(*) > 1"
+      csv_file: /opt/project/artifacts/silver_prd_duplicates.csv
+      severity: high
+
+    - name: invalid_prd_line
+      table: silver.crm_prd_info
+      description: Check for invalid product line values
+      issue_query: "SELECT prd_id, prd_line FROM silver.crm_prd_info WHERE prd_line NOT IN ('Mountain', 'Road', 'Other Sales', 'Touring', 'n/a')"
+      csv_file: /opt/project/artifacts/silver_invalid_prd_line.csv
+      severity: medium
+
+    - name: invalid_order_dates
+      table: silver.crm_sales_details
+      description: Check for invalid order dates
+      issue_query: "SELECT sls_ord_num, sls_order_dt FROM silver.crm_sales_details WHERE sls_order_dt IS NULL AND sls_ord_num IS NOT NULL"
+      csv_file: /opt/project/artifacts/silver_invalid_order_dates.csv
+      severity: medium
+
+  gold:
+    - name: customer_key_duplicates
+      table: gold.dim_customers
+      description: Check for duplicate customer keys in dimension
+      issue_query: "SELECT customer_key, COUNT(*) AS duplicate_count FROM gold.dim_customers GROUP BY customer_key HAVING COUNT(*) > 1"
+      csv_file: /opt/project/artifacts/gold_cust_key_duplicates.csv
+      severity: critical
+
+    - name: product_key_duplicates
+      table: gold.dim_products
+      description: Check for duplicate product keys in dimension
+      issue_query: "SELECT product_key, COUNT(*) AS duplicate_count FROM gold.dim_products GROUP BY product_key HAVING COUNT(*) > 1"
+      csv_file: /opt/project/artifacts/gold_prod_key_duplicates.csv
+      severity: critical
+
+    - name: orphaned_sales
+      table: gold.fact_sales
+      description: Check for sales facts without matching dimensions
+      issue_query: "SELECT f.order_number, f.customer_key, f.product_key, c.customer_id, p.product_id FROM gold.fact_sales f LEFT JOIN gold.dim_customers c ON c.customer_key = f.customer_key LEFT JOIN gold.dim_products p ON p.product_key = f.product_key WHERE c.customer_id IS NULL OR p.product_id IS NULL"
+      csv_file: /opt/project/artifacts/gold_orphaned_sales.csv
+      severity: high
+
+quality_thresholds:
+  pass_threshold: 95.0  # Minimum clean percentage to pass
+  severity_weights:
+    critical: 1.0
+    high: 0.8
+    medium: 0.6
+    low: 0.4
