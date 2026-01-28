@@ -4,6 +4,8 @@ from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import csv
+import requests
+import json
 
 default_args = {
     'owner': 'data-eng',
@@ -258,6 +260,72 @@ def run_quality_checks(layer, sql_file, output_prefix):
             f.write(f"  Issue Percentage: {metrics['issue_percentage']}%\n")
             f.write(f"  Status: {metrics['status']}\n\n")
 
+def run_data_profiling(layer):
+    import pandas as pd
+    from ydata_profiling import ProfileReport
+    hook = PostgresHook(postgres_conn_id='postgres_default')
+    conn = hook.get_conn()
+    
+    if layer == 'silver':
+        tables = [
+            ('silver.crm_cust_info', 'SELECT * FROM silver.crm_cust_info'),
+            ('silver.crm_prd_info', 'SELECT * FROM silver.crm_prd_info'),
+            ('silver.crm_sales_details', 'SELECT * FROM silver.crm_sales_details'),
+        ]
+    elif layer == 'gold':
+        tables = [
+            ('gold.dim_customers', 'SELECT * FROM gold.dim_customers'),
+            ('gold.dim_products', 'SELECT * FROM gold.dim_products'),
+            ('gold.fact_sales', 'SELECT * FROM gold.fact_sales'),
+        ]
+    
+    for table_name, query in tables:
+        df = pd.read_sql(query, conn)
+        profile = ProfileReport(df, title=f"Profile for {table_name}", minimal=True)
+        output_path = f'/opt/project/artifacts/{table_name.replace(".", "_")}_profile.html'
+        profile.to_file(output_path)
+        print(f"Profile generated for {table_name}")
+
+def run_pandera_validation(layer):
+    import pandas as pd
+    from scripts.data_schemas import bronze_crm_cust_schema, silver_crm_cust_schema, gold_dim_customers_schema
+    hook = PostgresHook(postgres_conn_id='postgres_default')
+    conn = hook.get_conn()
+    
+    if layer == 'bronze':
+        df = pd.read_sql('SELECT * FROM bronze.crm_cust_info', conn)
+        schema = bronze_crm_cust_schema
+        table_name = 'bronze.crm_cust_info'
+    elif layer == 'silver':
+        df = pd.read_sql('SELECT * FROM silver.crm_cust_info', conn)
+        schema = silver_crm_cust_schema
+        table_name = 'silver.crm_cust_info'
+    elif layer == 'gold':
+        df = pd.read_sql('SELECT * FROM gold.dim_customers', conn)
+        schema = gold_dim_customers_schema
+        table_name = 'gold.dim_customers'
+    
+    try:
+        validated_df = schema.validate(df)
+        with open(f'/opt/project/artifacts/{table_name.replace(".", "_")}_pandera_validation.json', 'w') as f:
+            json.dump({"status": "PASS", "message": "Validation successful"}, f)
+        print(f"Pandera validation passed for {table_name}")
+    except Exception as e:
+        with open(f'/opt/project/artifacts/{table_name.replace(".", "_")}_pandera_validation.json', 'w') as f:
+            json.dump({"status": "FAIL", "message": str(e)}, f)
+        print(f"Pandera validation failed for {table_name}: {e}")
+        raise e
+
+def send_alert(message, webhook_url=None):
+    if not webhook_url:
+        webhook_url = os.getenv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK')
+    payload = {"text": message}
+    response = requests.post(webhook_url, json=payload)
+    if response.status_code != 200:
+        print(f"Failed to send alert: {response.text}")
+    else:
+        print("Alert sent successfully")
+
 # Quality Checks
 quality_silver = PythonOperator(
     task_id='quality_silver',
@@ -273,5 +341,51 @@ quality_gold = PythonOperator(
     dag=dag,
 )
 
+# Profiling Tasks
+profile_silver = PythonOperator(
+    task_id='profile_silver',
+    python_callable=run_data_profiling,
+    op_kwargs={'layer': 'silver'},
+    dag=dag,
+)
+
+profile_gold = PythonOperator(
+    task_id='profile_gold',
+    python_callable=run_data_profiling,
+    op_kwargs={'layer': 'gold'},
+    dag=dag,
+)
+
+# Pandera Validation Tasks
+pandera_bronze = PythonOperator(
+    task_id='pandera_bronze',
+    python_callable=run_pandera_validation,
+    op_kwargs={'layer': 'bronze'},
+    dag=dag,
+)
+
+pandera_silver = PythonOperator(
+    task_id='pandera_silver',
+    python_callable=run_pandera_validation,
+    op_kwargs={'layer': 'silver'},
+    dag=dag,
+)
+
+pandera_gold = PythonOperator(
+    task_id='pandera_gold',
+    python_callable=run_pandera_validation,
+    op_kwargs={'layer': 'gold'},
+    dag=dag,
+)
+
+# Alert Task (example for failures)
+alert_failure = PythonOperator(
+    task_id='alert_failure',
+    python_callable=send_alert,
+    op_kwargs={'message': 'Data quality validation failed in the pipeline'},
+    dag=dag,
+    trigger_rule='one_failed',  # Run if any upstream task fails
+)
+
 # Dependencies
-init_db >> ddl_bronze >> ddl_silver >> ddl_gold >> load_bronze >> load_silver >> quality_silver >> quality_gold
+init_db >> ddl_bronze >> ddl_silver >> ddl_gold >> load_bronze >> load_silver >> [quality_silver, profile_silver, pandera_silver] >> [quality_gold, profile_gold, pandera_gold] >> alert_failure

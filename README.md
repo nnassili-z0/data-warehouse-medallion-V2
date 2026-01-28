@@ -1,6 +1,8 @@
 # Data Warehouse Medallion V2
 
-A comprehensive implementation of a data warehouse using the Medallion Architecture (Bronze, Silver, Gold) with PostgreSQL, Apache Airflow for orchestration, and Docker for local development. This version includes enhanced data quality checks with detailed metrics, percentages, and comprehensive reporting.
+**A modern, production-ready data warehouse implementation using the Medallion Architecture (Bronze → Silver → Gold) with enterprise-grade data quality validation, comprehensive monitoring, and automated orchestration.**
+
+This project demonstrates best practices for building scalable data warehouses with PostgreSQL, Apache Airflow, Great Expectations, and Docker. It includes advanced data quality checks with detailed metrics, percentages, and comprehensive reporting—moving beyond basic row counts to provide actionable insights into data health and lineage.
 
 ## Architecture
 
@@ -19,6 +21,9 @@ The Medallion Architecture organizes data into three layers of increasing refine
 - **PostgreSQL 15**: Database engine for all data layers.
 - **Apache Airflow 2.8.3**: Workflow orchestration for ETL pipelines.
 - **Great Expectations 0.18.12**: Data quality validation framework with expectation suites and checkpoints.
+- **Pandera 0.18.0**: DataFrame validation library for runtime schema checks.
+- **YData Profiling 4.6.0**: Automated data profiling and exploratory data analysis.
+- **Prometheus & Grafana**: Monitoring and visualization of pipeline metrics.
 - **Docker & Docker Compose**: Containerized development environment.
 - **Python**: Custom quality check logic and data processing.
 
@@ -30,6 +35,8 @@ The original version had quality checks that only performed basic `SELECT COUNT(
 - **Multiple Output Formats**: Artifacts now include CSV files with issue details, JSON summaries with metrics, and human-readable text reports.
 - **Enhanced Pipeline**: Added database initialization task and improved Docker configuration for proper permissions and volume mounting.
 - **Robust Quality Checks**: Implemented in Python for complex logic, including data sampling and detailed issue reporting.
+- **Advanced Data Quality**: Added Pandera schema validation and automated profiling with YData Profiling.
+- **Monitoring & Alerting**: Integrated Prometheus and Grafana for pipeline observability, with Slack webhook alerts for failures.
 
 ## Setup
 
@@ -53,11 +60,23 @@ The original version had quality checks that only performed basic `SELECT COUNT(
 
 3. **Access Interfaces**
    - **Airflow UI**: http://localhost:8080 (username: `admin`, password: `admin`)
+   - **Prometheus**: http://localhost:9090
+   - **Grafana**: http://localhost:3000 (username: `admin`, password: `admin`)
    - **PostgreSQL**: localhost:5432 (username: `airflow`, password: `airflow`)
 
 4. **Run the Pipeline**
    - In Airflow UI, enable and trigger the `medallion_pipeline` DAG.
    - Monitor task execution and view logs for each step.
+
+## Monitoring and Alerting
+
+The pipeline includes comprehensive monitoring and alerting capabilities:
+
+- **Prometheus**: Collects metrics from Airflow and pipeline components.
+- **Grafana**: Visualizes pipeline performance, DAG run durations, and task statuses.
+- **Alerting**: Slack webhooks notify on validation failures (configure `SLACK_WEBHOOK_URL` environment variable).
+
+Access Grafana dashboards at http://localhost:3000 to monitor pipeline health.
 
 ## Data Pipeline
 
@@ -69,10 +88,16 @@ The `medallion_pipeline` DAG executes the following tasks in sequence:
 4. **ddl_gold**: Create Gold layer dimensions and facts.
 5. **load_bronze**: Load CSV data into Bronze tables.
 6. **load_silver**: Transform and load data into Silver layer.
-7. **ge_silver_validation**: Great Expectations validation on Silver layer (parallel expectation execution).
-8. **ge_gold_validation**: Great Expectations validation on Gold layer (parallel expectation execution).
-9. **quality_silver**: Custom quality checks on Silver layer data (parallel execution).
-10. **quality_gold**: Custom quality checks on Gold layer data (parallel execution).
+7. **pandera_bronze**: Pandera schema validation on Bronze layer.
+8. **pandera_silver**: Pandera schema validation on Silver layer.
+9. **pandera_gold**: Pandera schema validation on Gold layer.
+10. **profile_silver**: Automated profiling on Silver layer tables.
+11. **profile_gold**: Automated profiling on Gold layer tables.
+12. **ge_silver_validation**: Great Expectations validation on Silver layer.
+13. **ge_gold_validation**: Great Expectations validation on Gold layer.
+14. **quality_silver**: Custom quality checks on Silver layer data.
+15. **quality_gold**: Custom quality checks on Gold layer data.
+16. **alert_failure**: Send alerts if any validation fails.
 
 ## Quality Checks
 

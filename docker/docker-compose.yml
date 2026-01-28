@@ -28,6 +28,9 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__PLUGINS_FOLDER: /opt/airflow/plugins
+      AIRFLOW__METRICS__STATSD_ON: 'True'
+      AIRFLOW__METRICS__STATSD_HOST: prometheus
+      AIRFLOW__METRICS__STATSD_PORT: 9125
     volumes:
       - ./dags:/opt/airflow/dags
       - ../datasets:/opt/project/datasets:ro
@@ -37,6 +40,7 @@ services:
       - ../config:/opt/project/config:ro
       - ../great_expectations:/opt/project/great_expectations
       - ../requirements.txt:/opt/project/requirements.txt:ro
+      - ../scripts:/opt/project/scripts:ro
     ports:
       - "8080:8080"
     depends_on:
@@ -49,5 +53,43 @@ services:
       timeout: 10s
       retries: 5
 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - statsd-exporter
+
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    ports:
+      - "9125:9125"
+      - "9125:9125/udp"
+    command:
+      - '--statsd.listen-udp=:9125'
+      - '--web.listen-address=:9125'
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   postgres-db-volume:
+  grafana-storage:

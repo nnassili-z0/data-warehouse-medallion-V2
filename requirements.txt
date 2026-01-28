@@ -6,3 +6,7 @@ psycopg2-binary==2.9.7
 great-expectations==0.18.12
 pandas==2.0.3
 sqlalchemy==1.4.49
+pandera==0.18.0
+ydata-profiling==4.6.0
+prometheus-client==0.19.0
+requests==2.31.0
